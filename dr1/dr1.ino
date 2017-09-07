@@ -1,12 +1,26 @@
 #define sample_rate (32000)
-#define cycleLength (256)
 
-// idx can go from 0-65535. Cycle length is 8bits (0-255), so we can
+const unsigned int octaveLookup[] = {
+    0x8000, // 0: 1.0 --> 32768.0
+    0x879c, // 1: 1.0594630943592953 --> 34716.48667596539
+    0x8fac, // 2: 1.122462048309373 --> 36780.836399001535
+    0x9837, // 3: 1.189207115002721 --> 38967.93874440916
+    0xa145, // 4: 1.2599210498948732 --> 41285.092962955205
+    0xaadc, // 5: 1.3348398541700344 --> 43740.032341443686
+    0xb504, // 6: 1.4142135623730951 --> 46340.95001184158
+    0xbfc8, // 7: 1.4983070768766815 --> 49096.5262950951
+    0xcb2f, // 8: 1.5874010519681994 --> 52015.95767089396
+    0xd744, // 9: 1.681792830507429 --> 55108.98747006743
+    0xe411, // 10: 1.7817974362806785 --> 58385.938392045275
+    0xf1a1, // 11: 1.8877486253633868 --> 61857.74695590746
+};
+
+// idx can go from 0-2^32. PWM resolution is 8bits (0-255), so we can
 // use an 8 bit fixed-point arrangement for smoother frequency control
 // ADC is 10bit, so if we simply add the ADC to idx, we'll end up with
 // 2 bits (0-3) of integer part, and 8 bits of fractional. That's probably Ok.
 
-unsigned int idx = 0;
+unsigned long idx = 0;
 
 void setup() {
 
@@ -57,18 +71,21 @@ unsigned int freqCtrl;
 unsigned int pwmCtrl;
 
 void loop() {
-  freqCtrl = (analogRead(A3) + 1) << 2;
-  pwmCtrl  = (analogRead(A1) + 1) << 6; // fill up the 16 bits
+  freqCtrl = (analogRead(A3)) >> 7; // 32 steps
+  
+  pwmCtrl  = (analogRead(A1) + 1) >>2; // reduce to 8 bits
 }
 
+unsigned char note=1;
 ISR(TIMER0_COMPA_vect)
 {
-  OCR1B = ~(idx >> 8); // PWM with the 'integer' part,
-  idx += freqCtrl;
+  unsigned char outByte = ((idx >> 15) & 0xff);
+
+  OCR1B = ~outByte; // PWM with the 'integer' part,
+  idx += octaveLookup[freqCtrl];
 
   // output PWM wave on pin 5:
-  if (idx < pwmCtrl)  { PORTB |= 1;  }  else { PORTB &= ~(1); }
+  if (outByte < pwmCtrl)  { PORTB |= 1;  }  else { PORTB &= ~(1); }
 
-  // no need to limit idx because it's just going to wrap and carry correctly
-  // all by itself
+  idx &= 0x00ffffff;
 }
