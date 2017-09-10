@@ -20,6 +20,13 @@ File.open("calc.h",'w') do |f|
   f.puts "#define WTSIZE (#{WTSIZE})"
   f.puts "#define OCTSTEPS (#{STEPS})"
   f.puts "#define NOTEMASK (0x#{(STEPS-1).to_s(16)})"
+  f.puts "extern const unsigned short octaveLookup[#{STEPS}];"
+  f.puts "extern const unsigned char wave[WTSIZE];"
+  f.puts
+end
+
+File.open("calc.ino",'w') do |f|
+  f.puts "#include \"calc.h\""
   f.puts "const unsigned short octaveLookup[#{STEPS}] PROGMEM = {"
 
   (0...STEPS).each do |n|
@@ -28,6 +35,21 @@ File.open("calc.h",'w') do |f|
     si = (WTSIZE * freq)/SRATE
     sifixed = ((WTSIZE << FRACBITS)* freq)/SRATE
     f.puts "  0x#{sifixed.to_i.to_s(16)}, // #{freq} [#{si}]"
+  end
+  f.puts "};\n"
+
+  # generate a sine table.
+  TWO_PI = 2 * Math::PI
+  LINELENGTH = 16
+  f.puts "// Wavetable/cycle length is #{WTSIZE} - here's a buffer for it:"
+  f.puts "const unsigned char wave[WTSIZE] PROGMEM = {"
+  f.print "  "
+  (0...WTSIZE).each do |n|
+    v = Math::sin(TWO_PI * n.to_f/WTSIZE.to_f)
+    f.print "0x#{((v*127)+127).to_i.to_s(16)}, "
+    if ((n % LINELENGTH) == (LINELENGTH-1))
+      f.print "\n  "
+    end
   end
   f.puts "};"
 end
