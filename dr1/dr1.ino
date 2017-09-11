@@ -71,8 +71,14 @@ ISR(TIMER0_COMPA_vect)
   // look up the wave based on our (rounded) index, and 
   // PWM with the 'integer' part,
   unsigned short oldIdx = idx;
-  unsigned short outByte = pgm_read_byte(&wave[(idx+0x20) >> 6]) + pgm_read_byte(&wave[(idx2+0x20) >> 6]);
-  OCR1B = (outByte >> 1) & 0xff;
+
+  // Phase Distortion Experiment #1
+  // unsigned short outByte = pgm_read_byte(&wave[(idx+0x20) >> 6]) + pgm_read_byte(&wave[(idx2+0x20) >> 6]);
+  //OCR1B = (outByte >> 1) & 0xff;
+
+  // Phase Distortion Experiment #2
+  unsigned char outByte = pgm_read_byte(&wave[(idx2+0x20) >> 6]);
+  OCR1B = outByte;
 
   idx += octave * (pgm_read_byte(&octaveLookup[note]));
   idx2 += octave2 * (pgm_read_byte(&octaveLookup[note2]));
