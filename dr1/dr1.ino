@@ -4,6 +4,7 @@
 // and 'some' bits of fraction. Not sure whether 6 is enough, but we'll
 // start with that.
 unsigned short idx = 0;
+unsigned short idx2 = 0;
 
 void setup()
 {
@@ -50,35 +51,43 @@ void setup()
   pinMode(PB0, OUTPUT);
 }
 
-unsigned short freqCtrl;
-unsigned short pwmCtrl;
+unsigned short ctrl2;
 unsigned char octave;
 unsigned char note;
+unsigned char octave2;
+unsigned char note2;
 
 void loop() {
-  freqCtrl = (analogRead(A3)) & 0x03ff;
+  unsigned short freqCtrl = analogRead(A3) & 0x03ff;
   octave = 1 << (freqCtrl >> 7); // leaves us with 3-bits of octave range (1-8)
   note = freqCtrl & NOTEMASK;
-  pwmCtrl  = (analogRead(A1) + 1) >> 2; // reduce to 8 bits
+  ctrl2  = analogRead(A1) & 0x03ff;
+  octave2 = 1 << (ctrl2 >> 7); // leaves us with 3-bits of octave range (1-8)
+  note2 = ctrl2 & NOTEMASK;
 }
 
 ISR(TIMER0_COMPA_vect)
 {
-  // look up the wave based on our index
-  unsigned char outByte = pgm_read_byte(&wave[idx >> 6]);
+  // look up the wave based on our (rounded) index, and 
+  // PWM with the 'integer' part,
+  unsigned short oldIdx = idx;
+  unsigned short outByte = pgm_read_byte(&wave[(idx+0x20) >> 6]) + pgm_read_byte(&wave[(idx2+0x20) >> 6]);
+  OCR1B = (outByte >> 1) & 0xff;
 
-  OCR1B = outByte; // PWM with the 'integer' part,
-  // the octave lookup has 15 bits of fraction, and the
-  // index only 6, so more shifting...
-  
-  idx += octave * (pgm_read_word(&octaveLookup[note]) >> 9);
+  idx += octave * (pgm_read_byte(&octaveLookup[note]));
+  idx2 += octave2 * (pgm_read_byte(&octaveLookup[note2]));
 
-  // output PWM wave on pin 5:
-  if ((idx >> 8) < pwmCtrl)  {
-    PORTB |= 1;
-  }  else {
-    PORTB &= ~(1);
+  // hard sync oscillator 2
+  if (idx < oldIdx)
+  {
+    idx2=0;
   }
+  // output PWM wave on pin 5:
+//  if ((idx >> 8) < pwmCtrl)  {
+//    PORTB |= 1;
+//  }  else {
+//    PORTB &= ~(1);
+//  }
 
   // idx will automatically wrap
 }

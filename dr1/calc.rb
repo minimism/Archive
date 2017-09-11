@@ -8,8 +8,10 @@ WTSIZE=1024
 ROOT=27.50
 
 # the integer part of the sample increments in the table are no
-# larger than 1, so we can use 15 bits for the fraction
-FRACBITS = 15
+# larger than 1, so we could use 15 bits for the fraction
+# however, the indexer only has 6 fractional bits, so we may as well
+# just match that and save some space
+FRACBITS = 6
 
 # 128 steps per octave means that the 10 bit ADC covers 4 octaves
 STEPS=128
@@ -20,14 +22,14 @@ File.open("calc.h",'w') do |f|
   f.puts "#define WTSIZE (#{WTSIZE})"
   f.puts "#define OCTSTEPS (#{STEPS})"
   f.puts "#define NOTEMASK (0x#{(STEPS-1).to_s(16)})"
-  f.puts "extern const unsigned short octaveLookup[#{STEPS}];"
+  f.puts "extern const unsigned char octaveLookup[#{STEPS}];"
   f.puts "extern const unsigned char wave[WTSIZE];"
   f.puts
 end
 
 File.open("calc.ino",'w') do |f|
   f.puts "#include \"calc.h\""
-  f.puts "const unsigned short octaveLookup[#{STEPS}] PROGMEM = {"
+  f.puts "const unsigned char octaveLookup[#{STEPS}] PROGMEM = {"
 
   (0...STEPS).each do |n|
     freq = ROOT * (2.0**(n.to_f/STEPS))
