@@ -57,7 +57,7 @@ unsigned char note;
 
 void loop() {
   freqCtrl = (analogRead(A3)) & 0x03ff;
-  octave = (freqCtrl >> 7) +1; // leaves us with 4 octave range (1-4)
+  octave = 1 << (freqCtrl >> 7); // leaves us with 3-bits of octave range (1-8)
   note = freqCtrl & NOTEMASK;
   pwmCtrl  = (analogRead(A1) + 1) >> 2; // reduce to 8 bits
 }
