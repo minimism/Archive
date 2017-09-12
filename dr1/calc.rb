@@ -1,7 +1,7 @@
 # We're going to generate an octave's worth of increments.
 # beginning by splitting an ocatve into steps
 
-SRATE=32768
+SRATE=50000
 WTSIZE=1024
 
 # root frequency is that of A0 (according to Dodge and Jerse pg.37)
@@ -18,8 +18,8 @@ STEPS=128
 
 
 File.open("calc.h",'w') do |f|
-  f.puts "#define SRATE (#{SRATE})"
-  f.puts "#define WTSIZE (#{WTSIZE})"
+  f.puts "#define SRATE (#{SRATE}L)"
+  f.puts "#define WTSIZE (#{WTSIZE}L)"
   f.puts "#define OCTSTEPS (#{STEPS})"
   f.puts "#define NOTEMASK (0x#{(STEPS-1).to_s(16)})"
   f.puts "extern const unsigned char octaveLookup[#{STEPS}];"

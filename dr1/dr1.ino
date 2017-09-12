@@ -6,6 +6,18 @@
 unsigned short idx = 0;
 unsigned short idx2 = 0;
 
+#define F_TIM (8000000L)
+
+// Remember(!) the input clock is 64MHz, therefore all rates
+// are relative to that.
+#if ((F_TIM/SRATE) < 255)
+#define T1_MATCH ((F_TIM/SRATE)-1)
+#define T1_PRESCALE (_BV(CS12))  //prescaler clk/8 (i.e. 8MHz)
+#else
+#define T1_MATCH (((F_TIM/8L)/SRATE)-1)
+#define T1_PRESCALE (_BV(CS12) | _BV(CS11) | _BV(CS10))  //prescaler clk/64 (i.e. 1MHz)
+#endif
+
 void setup()
 {
   PLLCSR |= _BV(PLLE);               // Enable 64 MHz PLL
@@ -13,42 +25,40 @@ void setup()
   while (!(PLLCSR & _BV(PLOCK)));    // Wait for it...
   PLLCSR |= _BV(PCKE);               // Timer1 source = PLL
 
-  // Set up Timer/Counter1 for PWM output
-  TIMSK  = 0;                        // Timer interrupts OFF
-  TCCR1  = _BV(CS10);                // 1:1 prescale
-  GTCCR  = _BV(PWM1B) | _BV(COM1B1); // PWM B, clear on match
-  OCR1C  = 255;                      // Full 8-bit PWM cycle
-  OCR1B  = 127;                      // 50% duty at start
+  ///////////////////////////////////////////////
+  // Set up Timer1 for the sample-update ISR since we want to
+  // use the dual compare-registers on Timer0 for the dual
+  // oscillator outputs (fast PWM)
 
-  pinMode(4, OUTPUT);                // Enable PWM output pin (chip pin 3)
+  TCCR1 = 0;                  // stop the timer
+  TCNT1 = 0;                  // zero the timer
+  GTCCR = _BV(PSR1);          // reset the prescaler
+  TIMSK = _BV(OCIE1A);        // interrupt on Compare Match A
 
-  // Set up Timer/Counter0 for sample-playing interrupt.
-  // TIMER0_OVF_vect is already in use by the Arduino runtime,
-  // so TIMER0_COMPA_vect is used.  This code alters the timer
-  // interval, making delay(), micros(), etc. useless (the
-  // overflow interrupt is therefore disabled).
+  OCR1A = T1_MATCH;           // set when the ISR will fire
+  OCR1C = T1_MATCH;           // we want the counter to clear when we match
 
-  // Timer resolution is limited to either 0.125 or 1.0 uS,
-  // so it's rare that the playback rate will precisely match
-  // the data, but the difference is usually imperceptible.
-  TCCR0A = _BV(WGM01) | _BV(WGM00);  // Mode 7 (fast PWM)
-  if (SRATE >= 31250) {
-    TCCR0B = _BV(WGM02) | _BV(CS00); // 1:1 prescale
-    OCR0A  = ((F_CPU + (SRATE / 2)) / SRATE) - 1;
-  } else {                           // Good down to about 3900 Hz
-    TCCR0B = _BV(WGM02) | _BV(CS01); // 1:8 prescale
-    OCR0A  = (((F_CPU / 8L) + (SRATE / 2)) / SRATE) - 1;
-  }
-  TIMSK = _BV(OCIE0A); // Enable compare match, disable overflow
+  //start timer, ctc mode, prescaler set
+  TCCR1 = _BV(CTC1) | T1_PRESCALE;
+
+  ///////////////////////////////////////////////
+  // Set up Timer/Counter0 for dual PWM output
+  TCCR0A = _BV(WGM00) | _BV(WGM01) | _BV(COM0A1) | _BV(COM0B1); // non-inverting mode, Fast PWM (full range)
+  TCCR0B = _BV(CS00); // No prescaler
+
+  OCR0A = 127; // 50% duty cycle to start with
+
+  // digital out for PWM output A (chip pin 5)
+  pinMode(PB0, OUTPUT);
+
+  // digital out for PWM output B (chip pin 6)
+  pinMode(PB1, OUTPUT);
 
   // read from analogue on (chip pin 2)
   pinMode(A3, INPUT);
 
   // read from analogue on (chip pin 7)
   pinMode(A1, INPUT);
-
-  // digital out for 'PWM' output (chip pin 5)
-  pinMode(PB0, OUTPUT);
 }
 
 unsigned short ctrl2;
@@ -66,19 +76,19 @@ void loop() {
   note2 = ctrl2 & NOTEMASK;
 }
 
-ISR(TIMER0_COMPA_vect)
+
+ISR(TIMER1_COMPA_vect)
 {
   // look up the wave based on our (rounded) index, and 
   // PWM with the 'integer' part,
   unsigned short oldIdx = idx;
 
-  // Phase Distortion Experiment #1
-  // unsigned short outByte = pgm_read_byte(&wave[(idx+0x20) >> 6]) + pgm_read_byte(&wave[(idx2+0x20) >> 6]);
-  //OCR1B = (outByte >> 1) & 0xff;
+  // Oscillator 1
+  unsigned short outByte = 
+  OCR0A = pgm_read_byte(&wave[(idx+0x20) >> 6]);
 
-  // Phase Distortion Experiment #2
-  unsigned char outByte = pgm_read_byte(&wave[(idx2+0x20) >> 6]);
-  OCR1B = outByte;
+  // Oscillator 2 (hard sync-ed to Osc1)
+  OCR0B = pgm_read_byte(&wave[(idx2+0x20) >> 6]);
 
   idx += octave * (pgm_read_byte(&octaveLookup[note]));
   idx2 += octave2 * (pgm_read_byte(&octaveLookup[note2]));
@@ -88,12 +98,7 @@ ISR(TIMER0_COMPA_vect)
   {
     idx2=0;
   }
-  // output PWM wave on pin 5:
-//  if ((idx >> 8) < pwmCtrl)  {
-//    PORTB |= 1;
-//  }  else {
-//    PORTB &= ~(1);
-//  }
 
   // idx will automatically wrap
 }
+
