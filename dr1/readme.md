@@ -9,7 +9,8 @@ The files in this directory go toward making the dr.1 noise-maker:
 
 * `calc.rb` is a code-generator which generates `calc.h` and `calc.ino`,
    containing definitions for sample rate, pitch-lookup table and audio-wavetable.
-   Simply run `ruby calc.rb` and the `calc.h` and `calc.ino` files will be regenerated
+   Simply run `ruby calc.rb` and the `calc.h` and `calc.ino` files will be regenerated.
+   
    This makes it relatively simple to update the audio wavetable, or number of pitches
    per octave, or the sampling rate etc.
 * `dr1.ino` is the main code - responsible for outputting the audio and reading
