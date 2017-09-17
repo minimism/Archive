@@ -1,10 +1,13 @@
 #include "calc.h"
 #define NUM_OSCS (2)
 
+// Base-timer is running at 8MHz
 #define F_TIM (8000000L)
 
 // Remember(!) the input clock is 64MHz, therefore all rates
 // are relative to that.
+// let the preprocessor calculate the various register values 'coz
+// they don't change after compile time
 #if ((F_TIM/(SRATE*NUM_OSCS)) < 255)
 #define T1_MATCH ((F_TIM/(SRATE*NUM_OSCS))-1)
 #define T1_PRESCALE (_BV(CS12))  //prescaler clk/8 (i.e. 8MHz)
@@ -61,10 +64,10 @@ void setup()
   pinMode(PB1, OUTPUT);
 
   ///////////////////////////////////////////////
-  // Set up the ADC (A3 for starters)
-  ADMUX  = osc[0].muxVal;
-  ADCSRA = _BV(ADEN) |_BV(ADSC);  // enable the ADC and start a conversion
-  DIDR0 = _BV(ADC3D);             // disable digital pin attached to ADC3
+  // Set up the ADC
+  ADMUX  = osc[0].muxVal;           // select the mux for osc 0
+  ADCSRA = _BV(ADEN) |_BV(ADSC);    // enable the ADC and start a conversion
+  DIDR0 = _BV(ADC3D) | _BV(ADC2D);  // disable digital pin attached to ADC 2 & 3
   // read from analogue on (chip pin 2)
   pinMode(A3, INPUT);
   // read from analogue on (chip pin 3)
@@ -75,29 +78,33 @@ void loop() {
   // nothing to do here, it's all run from the timer interrupt
 }
 
-unsigned char oscNum=0;
-
+// deal with multiple oscillators, straight-line code
 ISR(TIMER1_COMPA_vect)
 {
-  oscStructDyn* currentOsc=&osc[oscNum];
+  static uint8_t oscNum=0;                  // declared as static to limit variable scope
+  oscStructDyn* currentOsc=&osc[oscNum];    // grab us a pointer to the currently-active oscillator info
+
+  // use locals for readability. If the compiler's any good, these'll be elided anyway.
   uint8_t octave;
   uint8_t note;
   
-  // look up the wave based on our (rounded) index, and 
-  // PWM with the 'integer' part,
+  // Read the freshly-converted value from the ADC
   currentOsc->adcVal = ADCL|(ADCH << 8);
   ADCSRA = 0;   // stop the converter
 
-  octave = 1 << (currentOsc->adcVal >> 7); // leaves us with 3-bits of octave range (1-8)
-  note = currentOsc->adcVal & NOTEMASK;
+  octave = 1 << (currentOsc->adcVal >> 7);  // 3-bits of octave range (1-8)
+  note = currentOsc->adcVal & NOTEMASK;     // 7 bits of note-range (128 steps in an octave here)
 
+  // look up the output-value based on the current phase counter (rounded)
   *currentOsc->outputReg = pgm_read_byte(&wave[(currentOsc->phase+0x20) >> 6]);
+  // increment the phase counter for next time round
   currentOsc->phase += octave * (pgm_read_byte(&octaveLookup[note]));
 
+  // next time we're dealing with a different oscillator; calculate which one:
   oscNum++;
   oscNum %= NUM_OSCS;
 
-  // Start the ADC off again
+  // Start the ADC off again, this time for the next oscillator
   ADMUX  = osc[oscNum].muxVal; // select the correct channel for the next conversion
   ADCSRA = _BV(ADEN) |_BV(ADSC);
 }
