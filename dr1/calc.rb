@@ -1,7 +1,11 @@
 # We're going to generate an octave's worth of increments.
 # beginning by splitting an ocatve into steps
 
-SRATE=50000
+# PWM rate is 250kHz, we'd like an integer-ratio of this
+# for our sample rate. Also, bear in mind that we are
+# generating 2 oscillators, so the interrupt will actually
+# be running at twice this rate...
+SRATE=62500	# 250/4
 WTSIZE=1024
 
 # root frequency is that of A0 (according to Dodge and Jerse pg.37)
@@ -16,20 +20,20 @@ FRACBITS = 6
 # 128 steps per octave means that the 10 bit ADC covers 4 octaves
 STEPS=128
 
-
 File.open("calc.h",'w') do |f|
+  f.puts "#include \"arduino.h\"\n"
   f.puts "#define SRATE (#{SRATE}L)"
   f.puts "#define WTSIZE (#{WTSIZE}L)"
   f.puts "#define OCTSTEPS (#{STEPS})"
   f.puts "#define NOTEMASK (0x#{(STEPS-1).to_s(16)})"
-  f.puts "extern const unsigned char octaveLookup[#{STEPS}];"
-  f.puts "extern const unsigned char wave[WTSIZE];"
+  f.puts "extern const uint8_t octaveLookup[#{STEPS}];"
+  f.puts "extern const uint8_t wave[WTSIZE];"
   f.puts
 end
 
 File.open("calc.ino",'w') do |f|
   f.puts "#include \"calc.h\""
-  f.puts "const unsigned char octaveLookup[#{STEPS}] PROGMEM = {"
+  f.puts "const uint8_t octaveLookup[#{STEPS}] PROGMEM = {"
 
   (0...STEPS).each do |n|
     freq = ROOT * (2.0**(n.to_f/STEPS))
@@ -44,7 +48,7 @@ File.open("calc.ino",'w') do |f|
   TWO_PI = 2 * Math::PI
   LINELENGTH = 16
   f.puts "// Wavetable/cycle length is #{WTSIZE} - here's a buffer for it:"
-  f.puts "const unsigned char wave[WTSIZE] PROGMEM = {"
+  f.puts "const uint8_t wave[WTSIZE] PROGMEM = {"
   f.print "  "
   (0...WTSIZE).each do |n|
     v = Math::sin(TWO_PI * n.to_f/WTSIZE.to_f)

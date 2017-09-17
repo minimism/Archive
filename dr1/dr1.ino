@@ -14,13 +14,13 @@
 #endif
 
 typedef struct {
+  volatile uint8_t  *outputReg;
   // This means that we want to have an indexer with 10 bits of integer
   // and 'some' bits of fraction. Not sure whether 6 is enough, but we'll
   // start with that.
-  unsigned short    phase;
-  unsigned short    adcVal;
-  unsigned short    muxVal;
-  volatile uint8_t  *outputReg;
+  uint16_t    phase;
+  uint16_t    adcVal;
+  uint16_t    muxVal;
 } oscStructDyn;
 
 oscStructDyn osc[NUM_OSCS];
@@ -72,6 +72,7 @@ void setup()
 }
 
 void loop() {
+  // nothing to do here, it's all run from the timer interrupt
 }
 
 unsigned char oscNum=0;
@@ -79,8 +80,8 @@ unsigned char oscNum=0;
 ISR(TIMER1_COMPA_vect)
 {
   oscStructDyn* currentOsc=&osc[oscNum];
-  unsigned char octave;
-  unsigned char note;
+  uint8_t octave;
+  uint8_t note;
   
   // look up the wave based on our (rounded) index, and 
   // PWM with the 'integer' part,
