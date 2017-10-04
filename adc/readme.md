@@ -9,6 +9,7 @@ The ADC interrupt routine is kicked off when the conversion completes, the next 
 is then selected and conversion kicked off again. The audio-rate ISR just reads the
 ADC values from the buffer as necessary.
 
+This program also allows switching between waveforms for oscillator 0 :)
 
 The files in this directory go toward making the tone generator:
 
