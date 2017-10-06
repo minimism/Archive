@@ -1,3 +1,5 @@
+OUTFILEROOT=File.basename(__FILE__,".rb")
+
 # We're going to generate a lookup table to map ADC values
 # (0-1023) to phase-increments. Each octave will be split
 # into 128 steps, giving a range of 8 octaves.
@@ -7,27 +9,29 @@
 # generating 2 oscillators, so the interrupt will actually
 # be running at twice this rate...
 SRATE=22500
-WTSIZE=1024
+PHASECOUNTERBITS = 16
+INTBITS	         = 10
+FRACBITS         = PHASECOUNTERBITS-INTBITS
+WTSIZE           = (2.0**INTBITS).to_i
 
 # root frequency is that of A0 (according to Dodge and Jerse pg.37)
-ROOT=27.50
+ROOT             = 27.50
 
-# The indexer only has 6 fractional bits, so we may as well
-# just match that.
-FRACBITS = 6
-
+DACBITS          = 10
+DACRANGE         = (2.0**DACBITS).to_i
 # 128 steps per octave means that the 10 bit ADC covers 8 octaves
 OCTSTEPS=128
-OCTS=(1024/128)
+OCTS=(DACRANGE/OCTSTEPS)
 
-File.open("calc.h",'w') do |f|
+File.open("#{OUTFILEROOT}.h",'w') do |f|
   f.puts "#include \"arduino.h\"\n"
   f.puts "#define SRATE    (#{SRATE}L)"
   f.puts "#define WTSIZE   (#{WTSIZE}L)"
   f.puts "#define FRACBITS (#{FRACBITS}L)"
-  f.puts "extern const uint16_t octaveLookup[1024];"
-  f.puts "extern const uint8_t sine[WTSIZE];"
-  f.puts "extern const uint8_t ramp[WTSIZE];"
+  f.puts "#define DACRANGE (#{DACRANGE}L)"
+  f.puts "extern const uint16_t octaveLookup[DACRANGE];"
+  f.puts "extern const uint8_t  sine[WTSIZE];"
+  f.puts "extern const uint8_t  ramp[WTSIZE];"
   f.puts
 end
 
@@ -35,11 +39,11 @@ end
 # subsequent octaves are simply power-of-2 multiples of those
 # base octave values
 
-File.open("calc.ino",'w') do |f|
-  f.puts "#include \"calc.h\""
-  f.puts "const uint16_t octaveLookup[1024] PROGMEM = {"
+File.open("#{OUTFILEROOT}.ino",'w') do |f|
+  f.puts "#include \"#{OUTFILEROOT}.h\""
+  f.puts "const uint16_t octaveLookup[DACRANGE] PROGMEM = {"
 
-  (0...1024).each do |n|
+  (0...DACRANGE).each do |n|
     freq = ROOT * (2.0**(n.to_f/OCTSTEPS))
     # Dodge & Jerse (pg.67) say that the sample increment is WTSIZE*(fo/fs)
     si = (WTSIZE * freq)/SRATE

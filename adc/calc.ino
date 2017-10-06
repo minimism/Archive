@@ -1,5 +1,5 @@
 #include "calc.h"
-const uint16_t octaveLookup[1024] PROGMEM = {
+const uint16_t octaveLookup[DACRANGE] PROGMEM = {
   0x50, // 27.5 [1.2515555555555555]
   0x50, // 27.649322280602075 [1.2583513784594011]
   0x50, // 27.799455366421764 [1.2651841020095949]

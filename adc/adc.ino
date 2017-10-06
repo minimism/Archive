@@ -38,10 +38,8 @@ void setup()
   PLLCSR |= _BV(PCKE);                // Timer1 source = PLL
 
   osc[0].outputReg = &OCR0A;                // Physical pin 5
-  osc[0].pi = 1 << 6;
   osc[0].wave = sine;
   osc[1].outputReg = &OCR0B;                // Physical pin 6
-  osc[1].pi = 2 << 6;
   osc[1].wave = sine;
 
   ///////////////////////////////////////////////
@@ -61,7 +59,6 @@ void setup()
   // Set up Timer/Counter0 for dual PWM output
   TCCR0A = _BV(WGM00) | _BV(WGM01) | _BV(COM0A1) | _BV(COM0B1); // non-inverting mode, Fast PWM (full range)
   TCCR0B = _BV(CS00); // No prescaler
-  OCR0A = 127; // 50% duty cycle to start with
   // digital out for PWM output A (chip pin 5)
   pinMode(PB0, OUTPUT);
   // digital out for PWM output B (chip pin 6)
@@ -126,7 +123,7 @@ ISR(TIMER1_COMPA_vect)
   currentOsc->phase += currentOsc->pi;
 
   // look up the output-value based on the current phase counter (rounded)
-  *currentOsc->outputReg = pgm_read_byte(&currentOsc->wave[(currentOsc->phase+0x20) >> 6]);
+  *currentOsc->outputReg = pgm_read_byte(&currentOsc->wave[(currentOsc->phase+0x20) >> FRACBITS]);
 
   // next time we're dealing with a different oscillator; calculate which one:
   oscNum = 1-oscNum;
