@@ -16,3 +16,13 @@ their full resolution of 10 bits, slower than the sample-generating ISR runs. Th
 that my imagined sample rate was not accurate (audio ISR was starving the ADC ISR), so I have reduced the
 sample rate. At the moment, this version also allows wavetable switching for oscillator 1 (sine/ramp).
 More waveforms will be forthcoming.
+
+## single
+
+*single* is a development of *adc*, concentrating on getting a few more
+features/quality into a single oscillator:
+
+* multiple selectable waveshapes;
+* higher sample rate (at least double that of *adc* since we don’t
+  need to toggle between two oscillators;
+* … plus some other stuff :)
