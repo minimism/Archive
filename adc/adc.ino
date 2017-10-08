@@ -78,6 +78,17 @@ void setup()
 void loop() {
   // nothing to do here, it's all run from the timer interrupt
 }
+#if 0
+// See http://doitwireless.com/2014/06/26/8-bit-pseudo-random-number-generator/
+uint8_t rnd()
+{
+  static uint8_t r = 0x23;
+  uint8_t lsb = r & 1;
+  r >>= 1;
+  r ^= (-lsb) & 0xB8;
+  return r;
+}
+#endif
 
 ISR(ADC_vect)
 {
@@ -123,7 +134,7 @@ ISR(TIMER1_COMPA_vect)
   currentOsc->phase += currentOsc->pi;
 
   // look up the output-value based on the current phase counter (rounded)
-  *currentOsc->outputReg = pgm_read_byte(&currentOsc->wave[(currentOsc->phase+0x20) >> FRACBITS]);
+  *currentOsc->outputReg = pgm_read_byte(&currentOsc->wave[(currentOsc->phase+HALF) >> FRACBITS]);
 
   // next time we're dealing with a different oscillator; calculate which one:
   oscNum = 1-oscNum;

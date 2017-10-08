@@ -28,6 +28,7 @@ File.open("#{OUTFILEROOT}.h",'w') do |f|
   f.puts "#define SRATE    (#{SRATE}L)"
   f.puts "#define WTSIZE   (#{WTSIZE}L)"
   f.puts "#define FRACBITS (#{FRACBITS}L)"
+  f.puts "#define HALF     (0x#{(1 << (FRACBITS-1)).to_s(16)})"
   f.puts "#define DACRANGE (#{DACRANGE}L)"
   f.puts "extern const uint16_t octaveLookup[DACRANGE];"
   f.puts "extern const uint8_t  sine[WTSIZE];"
