@@ -1,5 +1,5 @@
 #include "arduino.h"
-#define SRATE    (22500L)
+#define SRATE    (50000L)
 #define WTSIZE   (1024L)
 #define FRACBITS (6L)
 #define HALF     (0x20)

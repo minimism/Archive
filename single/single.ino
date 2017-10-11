@@ -1,5 +1,4 @@
 #include "calc.h"
-#define NUM_OSCS (2)
 #define NUM_ADCS (4)
 
 // Base-timer is running at 8MHz
@@ -13,22 +12,20 @@
 // are relative to that.
 // let the preprocessor calculate the various register values 'coz
 // they don't change after compile time
-#if ((F_TIM/(SRATE*NUM_OSCS)) < 255)
-#define T1_MATCH ((F_TIM/(SRATE*NUM_OSCS))-1)
-#define T1_PRESCALE (_BV(CS12))  //prescaler clk/8 (i.e. 8MHz)
+#if ((F_TIM/(SRATE)) < 255)
+#define T1_MATCH ((F_TIM/(SRATE))-1)
+#define T1_PRESCALE _BV(CS00)  //prescaler clk/1 (i.e. 8MHz)
 #else
-#define T1_MATCH (((F_TIM/8L)/(SRATE*NUM_OSCS))-1)
-#define T1_PRESCALE (_BV(CS12) | _BV(CS11) | _BV(CS10))  //prescaler clk/64 (i.e. 1MHz)
+#define T1_MATCH (((F_TIM/8L)/(SRATE))-1)
+#define T1_PRESCALE _BV(CS01)  //prescaler clk/8 (i.e. 1MHz)
 #endif
 
-typedef struct {
-  volatile uint8_t  *outputReg; // which PWM register will this oscillator use?
-  const uint8_t     *wave;      // which wavetable will this oscillator use?
-  uint16_t          phase;      // The accumulated phase (distance through the wavetable)
-  uint16_t          pi;         // current phase increment (how much phase will increase per sample)
-} oscStructDyn;
 
-oscStructDyn osc[NUM_OSCS];
+#define OSCOUTREG (OCR1A)
+
+const uint8_t     *wave;      // which wavetable will this oscillator use?
+uint16_t          phase;      // The accumulated phase (distance through the wavetable)
+uint16_t          pi;         // current phase increment (how much phase will increase per sample)
 
 void setup()
 {
@@ -37,47 +34,43 @@ void setup()
   while (!(PLLCSR & _BV(PLOCK)));     // Wait for it...
   PLLCSR |= _BV(PCKE);                // Timer1 source = PLL
 
-  osc[0].outputReg = &OCR0A;                // Physical pin 5
-  osc[0].wave = sine;
-  osc[1].outputReg = &OCR0B;                // Physical pin 6
-  osc[1].wave = sine;
-
   ///////////////////////////////////////////////
-  // Set up Timer1 for the sample-update ISR since we want to
-  // use the dual compare-registers on Timer0 for the dual
-  // oscillator outputs (fast PWM)
+  // Set up Timer/Counter1 for 250kHz PWM output
   TCCR1 = 0;                  // stop the timer
   TCNT1 = 0;                  // zero the timer
   GTCCR = _BV(PSR1);          // reset the prescaler
-  TIMSK = _BV(OCIE1A);        // interrupt on Compare Match A
-  OCR1A = T1_MATCH;           // set when the ISR will fire
-  OCR1C = T1_MATCH;           // we want the counter to clear when we match
-  //start timer, ctc mode, prescaler set
-  TCCR1 = _BV(CTC1) | T1_PRESCALE;
+  TCCR1 = _BV(PWM1A) | _BV(COM1A1) | _BV(COM1A0) | _BV(CS10);
+  OCR1C = 255;
+  OCR1A = 128;                // start with 50% duty cycle on the PWM
+  pinMode(PB1, OUTPUT);       // PWM output pin
 
+
+  wave = sine;
   ///////////////////////////////////////////////
-  // Set up Timer/Counter0 for dual PWM output
-  TCCR0A = _BV(WGM00) | _BV(WGM01) | _BV(COM0A1) | _BV(COM0B1); // non-inverting mode, Fast PWM (full range)
-  TCCR0B = _BV(CS00); // No prescaler
-  // digital out for PWM output A (chip pin 5)
-  pinMode(PB0, OUTPUT);
-  // digital out for PWM output B (chip pin 6)
-  pinMode(PB1, OUTPUT);
+  // Set up Timer/Counter0 for sample-rate ISR
+  TCCR0B = 0;                 // stop the timer (no clock source)
+  TCNT0 = 0;                  // zero the timer
+
+  TCCR0A = _BV(WGM01);        // CTC Mode
+  TCCR0B = T1_PRESCALE;
+  OCR0A = T1_MATCH;           // calculated match value
+  TIMSK |= _BV(OCIE0A);
 
   ///////////////////////////////////////////////
   // Set up the ADC
-  // read from analogue on (chip pin 2)
-  pinMode(A3, INPUT);
+  // read from analogue on (chip pin 7)
+  pinMode(A1, INPUT);
   // read from analogue on (chip pin 3)
   pinMode(A2, INPUT);
-  DIDR0 = _BV(ADC3D) | _BV(ADC2D);  // disable digital pin attached to ADC 2 & 3
+  DIDR0 = _BV(ADC1D) | _BV(ADC2D);  // disable digital pin attached to ADC 1 & 2
   ADMUX  = 0;                       // select the mux for ADC0
-  ADCSRA = ADCSRAVAL;               // enable the ADC, set prescaler and start a conversion
+  //ADCSRA = ADCSRAVAL;             // enable the ADC, set prescaler and start a conversion
+
+  pinMode(PB0, OUTPUT);       // signalling pin
+
+  pi = 1;
 }
 
-void loop() {
-  // nothing to do here, it's all run from the timer interrupt
-}
 #if 0
 // See http://doitwireless.com/2014/06/26/8-bit-pseudo-random-number-generator/
 uint8_t rnd()
@@ -90,23 +83,34 @@ uint8_t rnd()
 }
 #endif
 
-ISR(ADC_vect)
+
+#define DATAWHEEL (1)
+
+void loop()
 {
-  static uint8_t adcNum=0;              // declared as static to limit variable scope
-  uint16_t  adcVal = ADCL|(ADCH << 8);   // Read the freshly-converted value from the ADC
+  static uint8_t adcNum=0;                // declared as static to limit variable scope
+#ifdef DATAWHEEL
+  static uint8_t dataWheel;
+#endif
+  uint16_t  adcVal = analogRead(adcNum);  // Get the next adc value
   switch(adcNum)
   {
     case 0: // reduced range ~ 512-1023
-      if (adcVal > 768)
-        osc[1].wave = ramp;
-      else
-        osc[1].wave = sine;
+#ifdef DATAWHEEL
+      if (adcVal > 768)   // i.e. push button
+        wave = (dataWheel > 128) ? ramp : sine;
+#endif
       break;
     case 1:
+#ifdef DATAWHEEL
+      // used by other functions via button push
+      dataWheel = adcVal >> 2;
+#endif
       break;
     case 2:
+      break;
     case 3:
-      osc[adcNum-2].pi = pgm_read_word(&octaveLookup[adcVal]);
+      pi = pgm_read_word(&octaveLookup[adcVal]);
       break;
   }
   
@@ -123,20 +127,16 @@ ISR(ADC_vect)
   ADCSRA |= _BV(ADSC);  // ADCSRAVAL;
 }
 
-
-// deal with multiple oscillators, straight-line code
-ISR(TIMER1_COMPA_vect)
+uint8_t state;
+// deal with oscillator; straight-line code
+ISR(TIM0_COMPA_vect)
 {
-  static uint8_t oscNum=0;                  // declared as static to limit variable scope
-  oscStructDyn* currentOsc=&osc[oscNum];    // grab a pointer to the currently-active oscillator info
-
+  PORTB ^= 1;
   // increment the phase counter
-  currentOsc->phase += currentOsc->pi;
-
+  phase += pi;
+  uint16_t p = (phase+HALF) >> FRACBITS;
+  
   // look up the output-value based on the current phase counter (rounded)
-  *currentOsc->outputReg = pgm_read_byte(&currentOsc->wave[(currentOsc->phase+HALF) >> FRACBITS]);
-
-  // next time we're dealing with a different oscillator; calculate which one:
-  oscNum = 1-oscNum;
+  OSCOUTREG = pgm_read_byte(&wave[p]);
 }
 

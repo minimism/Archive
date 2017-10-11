@@ -8,7 +8,7 @@ OUTFILEROOT=File.basename(__FILE__,".rb")
 # for our sample rate. Also, bear in mind that we are
 # generating 2 oscillators, so the interrupt will actually
 # be running at twice this rate...
-SRATE=22500
+SRATE=50000
 PHASECOUNTERBITS = 16
 INTBITS	         = 10
 FRACBITS         = PHASECOUNTERBITS-INTBITS
