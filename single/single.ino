@@ -5,8 +5,8 @@
 #define F_TIM (8000000L)
 
 // Fixed value to start the ADC
-// enable ADC, start conversion, prescaler = /32 gives us an ADC clock of 8MHz/32 (250kHz)
-#define ADCSRAVAL ( _BV(ADEN) | _BV(ADSC) | _BV(ADPS2) | _BV(ADIE) )
+// enable ADC, start conversion, prescaler = /64 gives us an ADC clock of 8MHz/64 (125kHz)
+#define ADCSRAVAL ( _BV(ADEN) | _BV(ADSC) | _BV(ADPS2) | _BV(ADPS1)  | _BV(ADIE) )
 
 // Remember(!) the input clock is 64MHz, therefore all rates
 // are relative to that.
@@ -23,6 +23,7 @@
 
 #define OSCOUTREG (OCR1A)
 
+const uint8_t     *waves[4];  // choice of wavetable
 const uint8_t     *wave;      // which wavetable will this oscillator use?
 uint16_t          phase;      // The accumulated phase (distance through the wavetable)
 uint16_t          pi;         // current phase increment (how much phase will increase per sample)
@@ -45,7 +46,10 @@ void setup()
   pinMode(PB1, OUTPUT);       // PWM output pin
 
 
-  wave = sine;
+  waves[0] = sine;
+  waves[1] = triangle;
+  waves[2] = sq;
+  waves[3] = ramp;
   ///////////////////////////////////////////////
   // Set up Timer/Counter0 for sample-rate ISR
   TCCR0B = 0;                 // stop the timer (no clock source)
@@ -58,11 +62,11 @@ void setup()
 
   ///////////////////////////////////////////////
   // Set up the ADC
-  // read from analogue on (chip pin 7)
+  pinMode(A0, INPUT);
   pinMode(A1, INPUT);
-  // read from analogue on (chip pin 3)
   pinMode(A2, INPUT);
-  DIDR0 = _BV(ADC1D) | _BV(ADC2D);  // disable digital pin attached to ADC 1 & 2
+  pinMode(A3, INPUT);
+  //DIDR0 = _BV(ADC0D) | _BV(ADC1D) | _BV(ADC2D) | _BV(ADC3D);  // disable digital pin attached to ADC channels
   ADMUX  = 0;                       // select the mux for ADC0
   //ADCSRA = ADCSRAVAL;             // enable the ADC, set prescaler and start a conversion
 
@@ -98,22 +102,21 @@ void loop()
     case 0: // reduced range ~ 512-1023
 #ifdef DATAWHEEL
       if (adcVal > 768)   // i.e. push button
-        wave = (dataWheel > 128) ? ramp : sine;
+        wave = waves[dataWheel >> 6 ];
 #endif
       break;
     case 1:
+      break;
+    case 2:
 #ifdef DATAWHEEL
       // used by other functions via button push
       dataWheel = adcVal >> 2;
 #endif
       break;
-    case 2:
-      break;
     case 3:
       pi = pgm_read_word(&octaveLookup[adcVal]);
       break;
-  }
-  
+  }  
 
   // next time we're dealing with a different channel; calculate which one:
   adcNum++;
@@ -128,15 +131,23 @@ void loop()
 }
 
 uint8_t state;
-// deal with oscillator; straight-line code
+// deal with oscillator
+
+// to save wavetable space, we play the wavetable forward, then
+// backwards and inverted
+
+// 0 1 2 3 4 5 6 7 
+// 0 1 2 3 3 2 1 0
+
 ISR(TIM0_COMPA_vect)
 {
-  PORTB ^= 1;
   // increment the phase counter
   phase += pi;
   uint16_t p = (phase+HALF) >> FRACBITS;
-  
+
   // look up the output-value based on the current phase counter (rounded)
-  OSCOUTREG = pgm_read_byte(&wave[p]);
+  uint16_t ix = p > 0x1ff ? (0x400-p) : p;
+  uint8_t s = pgm_read_byte(&wave[ix & 0x1ff]);
+  OSCOUTREG = p > 0x1ff ? s : -s;
 }
 
