@@ -138,13 +138,17 @@ ISR(TIM0_COMPA_vect)
 {
   // increment the phase counter
   phase += pi;
+  // By shifting the 16 bit number by 6, we are left with a number
+  // in the range 0-1023 (0-0x3ff)
   uint16_t p = (phase) >> FRACBITS;
 
-  // look up the output-value based on the current phase counter (rounded)
-  uint16_t ix = p > 0x1ff ? (0x400-p) : p;
-  uint8_t s1 = pgm_read_byte(&wave1[ix & 0x1ff]);
-  uint8_t s2 = pgm_read_byte(&wave2[ix & 0x1ff]);
-  uint8_t s = (s1 >> 1) + (s2 >> 1);
-  OSCOUTREG = p > 0x1ff ? s : -s;
+  // look up the output-value based on the current phase counter (truncated)
+  uint16_t ix = p < WTSIZE ? p : ((2*WTSIZE-1) - p);
+
+  uint8_t s1 = pgm_read_byte(&wave1[ix]);
+  uint8_t s2 = pgm_read_byte(&wave2[ix]);
+  uint8_t s = s1 + s2;
+
+  OSCOUTREG = p < WTSIZE ? -s : s;
 }
 
