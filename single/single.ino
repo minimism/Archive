@@ -23,8 +23,9 @@
 
 #define OSCOUTREG (OCR1A)
 
-const uint8_t     *waves[4];  // choice of wavetable
-const uint8_t     *wave;      // which wavetable will this oscillator use?
+const uint8_t     *waves[5];  // choice of wavetable
+const uint8_t     *wave1;     // which wavetable will this oscillator use?
+const uint8_t     *wave2;     // which wavetable will this oscillator use?
 uint16_t          phase;      // The accumulated phase (distance through the wavetable)
 uint16_t          pi;         // current phase increment (how much phase will increase per sample)
 
@@ -50,6 +51,7 @@ void setup()
   waves[1] = triangle;
   waves[2] = sq;
   waves[3] = ramp;
+  waves[4] = sine;
   ///////////////////////////////////////////////
   // Set up Timer/Counter0 for sample-rate ISR
   TCCR0B = 0;                 // stop the timer (no clock source)
@@ -93,25 +95,18 @@ uint8_t rnd()
 void loop()
 {
   static uint8_t adcNum=0;                // declared as static to limit variable scope
-#ifdef DATAWHEEL
-  static uint8_t dataWheel;
-#endif
+  static uint8_t waveSelect;
   uint16_t  adcVal = analogRead(adcNum);  // Get the next adc value
   switch(adcNum)
   {
     case 0: // reduced range ~ 512-1023
-#ifdef DATAWHEEL
-      if (adcVal > 768)   // i.e. push button
-        wave = waves[dataWheel >> 6 ];
-#endif
       break;
     case 1:
       break;
     case 2:
-#ifdef DATAWHEEL
-      // used by other functions via button push
-      dataWheel = adcVal >> 2;
-#endif
+      waveSelect = adcVal >> 7;                     // gives us 0-7
+      wave1 = waves[waveSelect >> 1];                   // 0-3
+      wave2 = waves[(waveSelect >> 1) + (waveSelect & 1)];  // 0-4
       break;
     case 3:
       pi = pgm_read_word(&octaveLookup[adcVal]);
@@ -143,11 +138,13 @@ ISR(TIM0_COMPA_vect)
 {
   // increment the phase counter
   phase += pi;
-  uint16_t p = (phase+HALF) >> FRACBITS;
+  uint16_t p = (phase) >> FRACBITS;
 
   // look up the output-value based on the current phase counter (rounded)
   uint16_t ix = p > 0x1ff ? (0x400-p) : p;
-  uint8_t s = pgm_read_byte(&wave[ix & 0x1ff]);
+  uint8_t s1 = pgm_read_byte(&wave1[ix & 0x1ff]);
+  uint8_t s2 = pgm_read_byte(&wave2[ix & 0x1ff]);
+  uint8_t s = (s1 >> 1) + (s2 >> 1);
   OSCOUTREG = p > 0x1ff ? s : -s;
 }
 

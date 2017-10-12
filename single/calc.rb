@@ -71,7 +71,7 @@ File.open("#{OUTFILEROOT}.ino",'w') do |f|
     # although we only need half of the wave in the table,
     # we still treat the wave as if it were whole.
     v = Math::sin(TWO_PI * n.to_f/WTSIZE.to_f)
-    f.print "0x#{((v*127)+127).to_i.to_s(16)}, "
+    f.print "0x#{((v*127)+128).to_i.to_s(16)}, "
     if ((n % LINELENGTH) == (LINELENGTH-1))
       f.print "\n  "
     end
@@ -81,7 +81,7 @@ File.open("#{OUTFILEROOT}.ino",'w') do |f|
   f.puts "const uint8_t ramp[WTSIZE] PROGMEM = {"
   f.print "  "
   (0...WTSIZE/2).each do |n|
-    f.print "0x#{(n/4).to_s(16)}, "
+    f.print "0x#{(128+(n/4)).to_s(16)}, "
     if ((n % LINELENGTH) == (LINELENGTH-1))
       f.print "\n  "
     end
