@@ -102,7 +102,6 @@ void loop()
   uint16_t        adcVal = analogRead(adcNum);  // Get the next adc value
   static uint8_t  perturb = 0;
   static uint8_t  ws=0;
-//  static uint16_t  syncAdcVal=0;
 
   switch(adcNum)
   {
@@ -128,15 +127,10 @@ void loop()
       wave2 = waves[(waveSelect >> 1) + (waveSelect & 1)];  // 0-4
       break;
     case 2:
-//      syncAdcVal = adcVal;
       pi_sync = pgm_read_word(&octaveLookup[adcVal]);
       break;
     case 3:
       pi = pgm_read_word(&octaveLookup[adcVal]);
-//      pi = pgm_read_word(&octaveLookup[(adcVal+syncAdcVal) % OCTSTEPS]);
-//      pi = pi >> (8-((adcVal+syncAdcVal)/OCTSTEPS));
-//      pi_sync = pgm_read_word(&octaveLookup[syncAdcVal % OCTSTEPS]);
-//      pi_sync = pi_sync >> (8-(syncAdcVal/OCTSTEPS));
       break;
   }  
 
@@ -153,8 +147,13 @@ void loop()
 }
 
 // deal with oscillator
+// at 50kHz sample rate (see SRATE), this ISR needs to take less than
+// 1/50000 seconds i.e. 20uS
 ISR(TIM0_COMPA_vect)
 {
+  // debug indicator marks start of ISR
+  PORTB |= 1;
+
   // increment the phase counter
   phase += pi;
 
@@ -179,30 +178,29 @@ ISR(TIM0_COMPA_vect)
   uint8_t s2 = pgm_read_byte(&wave2[ix]);
   uint8_t s = s1 + s2;                          // 's' has a midpoint of 0x80
 
-
+#if 1
   //uint16_t sp = phase_sync >> (FRACBITS+1);
   //uint8_t sync_env = pgm_read_byte(&sine[sp]);  // 'sync_env' has a midpoint of 0x40
 
-  // useful debug indicator to see if the sample rate is correct
-  PORTB ^= 1;
-
-
-  // 'multiply' the sample (s) by the envelope (sync_env). This is an 8x8bit multiply
+  // multiply the sample (s) by the envelope (sync_env). This is an 8x8bit multiply
   // with the result being 16 bit. However we only actually want the most significant
   // 8 bits. We know that the msbit of 's' is fixed (because we packed the tables),
   // therefore we can limit this multiply to 7 successive adds/shifts
   //
+
 #if 0
-  // ~15us with a lot of jitter
+  // ISR upto ~25us with a *lot* of jitter
   s -= 0x80;                          // remove 'dc offset'
   uint8_t sync_env = phase_sync >> 8;
   uint16_t sm = s * sync_env;
   s = sm >> 8;
   s += 0x80;      // move wave back to 'zero'
 #else
-  // ~9us with a bit of jitter
+  // ISR start-end ~20uS
+  // ISR start-start ~30us with a bit of jitter
+  
   uint16_t sync_env = phase_sync & 0xff00;
-  uint16_t sm = 0x8000;  // preload the msbit
+  uint16_t sm = 0;  // preload the msbit
   sync_env = sync_env >> 2;
   sm += (s & 0x40) == 0 ? 0 :sync_env;
   sync_env = sync_env >> 1;
@@ -218,13 +216,13 @@ ISR(TIM0_COMPA_vect)
   sync_env = sync_env >> 1;
   sm += (s & 0x01) == 0 ? 0 :sync_env;
   s = sm >> 8;
+  s |= 0x80;
 #endif
-
-
-  // useful debug indicator to see if the sample rate is correct
-  PORTB ^= 1;
-  
+#endif 
   // invert the wave for the second half
   OSCOUTREG = p < WTSIZE ? -s : s;
+
+  // debug indicator marks end of ISR
+  PORTB &= 0xfe;
 }
 
